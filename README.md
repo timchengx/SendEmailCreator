@@ -1,7 +1,5 @@
 ## SendEmailCreator
------------
-This is a kanboard plugin modifies from [creecros/SendEmailCreator](https://github.com/creecros/SendEmailCreator)
-
+This is a kanboard plugin modify from [creecros/SendEmailCreator](https://github.com/creecros/SendEmailCreator)
 
 # Auto Email Extended Actions
 
