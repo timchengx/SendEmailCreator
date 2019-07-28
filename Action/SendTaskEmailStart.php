@@ -8,7 +8,7 @@ use Kanboard\Action\Base;
 /**
  * Email a task notification of impending due date 
  */
-class SubTaskEmailDue extends Base
+class SendTaskEmailStart extends Base
 {
     /**
      * Get automatic action description
@@ -18,7 +18,7 @@ class SubTaskEmailDue extends Base
      */
     public function getDescription()
     {
-        return t('Send email notification of impending subtask due date');
+        return t('Send email notification of start data occur task');
     }
     /**
      * Get the list of compatible events
@@ -41,8 +41,7 @@ class SubTaskEmailDue extends Base
     public function getActionRequiredParameters()
     {
         return array(
-            // 'subject' => t('Email subject'),
-            'duration' => t('Duration in days'),
+            'send_to' => array('assignee' => t('Send to Assignee'), 'creator' => t('Send to Creator'), 'both' => t('Send to Both')),
         );
     }
     /**
@@ -53,7 +52,7 @@ class SubTaskEmailDue extends Base
      */
     public function getEventRequiredParameters()
     {
-        return array('tasks');        
+        return array('tasks');
     }
     /**
      * Check if the event data meet the action condition
@@ -64,38 +63,38 @@ class SubTaskEmailDue extends Base
      */
     public function hasRequiredCondition(array $data)
     {
-       return count($data['tasks']) > 0;
+        return count($data['tasks']) > 0;
     }
 
     public function doAction(array $data)
     {
         $results = array();
-        $subtasks = array();
-        $max = $this->getParam('duration') * 86400;
-        
-        foreach ($data['tasks'] as $task) {
-          $subtasks = $this->subtaskModel->getAll($task['id']);
-            
-            foreach ($subtasks as $subtask) {
-            $user = $this->userModel->getById($subtask['user_id']);
-          
-                $duration = $subtask['due_date'] - time();
-                if ($subtask['due_date'] > 0) {
-                  if ($subtask['status'] < 2) {  
-                    if ($duration < $max) {
-                      if (! empty($user['email'])) {
-                        $results[] = $this->sendEmail($subtask['task_id'], $subtask['title'], $user);
-                      }
-                    }
-                  }
-                }
-           
-            }
-            
+
+        if ($this->getParam('send_to') !== null) {
+            $send_to = $this->getParam('send_to');
+        } else {
+            $send_to = 'both';
         }
-        
-        
-                
+
+        foreach ($data['tasks'] as $task) {
+            if ($task['date_started'] - 86400 < time() && $task['date_started'] + 86400 > time()) {
+                if ($send_to == 'assignee' || $send_to == 'both') {
+                    $user = $this->userModel->getById($task['owner_id']);
+                    if (!empty($user['email'])) {
+                        $results[] = $this->sendEmail($task['id'], $user);
+                        $this->taskMetadataModel->save($task['id'], ['task_last_emailed_toassignee' => time()]);
+                    }
+                }
+                if ($send_to == 'creator' || $send_to == 'both') {
+                    $user = $this->userModel->getById($task['creator_id']);
+                    if (!empty($user['email'])) {
+                        $results[] = $this->sendEmail($task['id'], $user);
+                        $this->taskMetadataModel->save($task['id'], ['task_last_emailed_tocreator' => time()]);
+                    }
+                }
+            }
+        }
+
         return in_array(true, $results, true);
     }
     /**
@@ -106,13 +105,13 @@ class SubTaskEmailDue extends Base
      * @param  array   $user
      * @return boolean
      */
-    private function sendEmail($task_id, $subject, array $user)
+    private function sendEmail($task_id, array $user)
     {
         $task = $this->taskFinderModel->getDetails($task_id);
         $this->emailClient->send(
             $user['email'],
             $user['name'] ?: $user['username'],
-            $subject,
+            '[Kanboard] ' . $task['title'],
             $this->template->render('notification/task_create', array('task' => $task))
         );
         return true;
