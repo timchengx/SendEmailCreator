@@ -108,11 +108,24 @@ class SendTaskEmailStart extends Base
     private function sendEmail($task_id, array $user)
     {
         $task = $this->taskFinderModel->getDetails($task_id);
+        $subtasks = $this->subtaskModel->getAll($task['id']);
+        $commentSortingDirection = $this->userMetadataCacheDecorator->get(UserMetadataModel::KEY_COMMENT_SORTING_DIRECTION, 'ASC');
         $this->emailClient->send(
             $user['email'],
             $user['name'] ?: $user['username'],
             '[Kanboard] ' . $task['title'],
-            $this->template->render('notification/task_create', array('task' => $task))
+            $this->template->render('task/show', array(
+                'task' => $task,
+                'project' => $this->projectModel->getById($task['project_id']),
+                'files' => $this->taskFileModel->getAllDocuments($task['id']),
+                'images' => $this->taskFileModel->getAllImages($task['id']),
+                'comments' => $this->commentModel->getAll($task['id'], $commentSortingDirection),
+                'subtasks' => $subtasks,
+                'internal_links' => $this->taskLinkModel->getAllGroupedByLabel($task['id']),
+                'external_links' => $this->taskExternalLinkModel->getAll($task['id']),
+                'link_label_list' => $this->linkModel->getList(0, false),
+                'tags' => $this->taskTagModel->getList($task['id']),
+            ))
         );
         return true;
     }
